@@ -2,31 +2,47 @@ $global:INPUT_FILE_NAME = "input.xlsx"
 $global:OUTPUT_FILE_NAME = "output.xlsx"
 
 $global:MEDIC_NAME_CODES = @{
-    "Барский": "4000";
-    "Маслов": "4001";
+    @"
+Барский
+"@ = "4000";
+    @"
+Маслов
+"@ = "4001";
 }
 
-$global:POLICY_PREFIX = "ЕНП - "
+$global:POLICY_PREFIX = @"
+ЕНП - 
+"@
 
 $global:POLICY_CODES = @{
-    "АВМ": "1";
-    "МАКС-М": "2";
-    "АСКОМЕД": "3";
-    "АЛЬЯНСМЕД": "4";
+    @"
+АВМ
+"@ = "1";
+    @"
+МАКС-М
+"@ = "2";
+    @"
+АСКОМЕД
+"@ = "3";
+    @"
+АЛЬЯНСМЕД
+"@ = "4";
 }
 
-$global:COMMON_CLINIC_PREFIX = "ГБУЗ"
+$global:COMMON_CLINIC_PREFIX = @"
+ГБУЗ
+"@
 
 function GetCommonProcessor
 {
-    [OutputType([function])]
+    #    [OutputType([Function])]
     param(
         [Parameter(Mandatory)]
         [int]$rowIndex,
         [Parameter(Mandatory)]
         [int]$columnIndex
     )
-    return function CommonProcessor
+    function CommonProcessor
     {
         [OutputType([String])]
         param(
@@ -40,6 +56,7 @@ function GetCommonProcessor
         $outputSheet.Cells.Item($rowIndex, $columnIndex).Value2 = $inputCellValue
         return $previousResult
     }
+    return ${function:CommonProcessor}
 }
 
 function ProcessSecondNameOrName
@@ -128,16 +145,16 @@ function ProcessClinicName
 }
 
 $global:PROCESSORS = @{
-    2: GetCommonProcessor(12, 2);
-    3: ${function:ProcessSecondNameOrName};
-    4: ${function:ProcessSecondNameOrName};
-    5: ${function:ProcessSurname};
-    6: GetCommonProcessor(7, 2);
-    7: GetCommonProcessor(6, 2);
-    8: ${function:ProcessPolicy};
-    9: ${function:ProcessPolicyCode};
-    10: GetCommonProcessor(8, 2);
-    11: ${function:ProcessClinicName};
+    2 = GetCommonProcessor 12 2;
+    3 = ${function:ProcessSecondNameOrName};
+    4 = ${function:ProcessSecondNameOrName};
+    5 = ${function:ProcessSurname};
+    6 = GetCommonProcessor 7 2;
+    7 = GetCommonProcessor 6 2;
+    8 = ${function:ProcessPolicy};
+    9 = ${function:ProcessPolicyCode};
+    10 = GetCommonProcessor 8 2;
+    11 = ${function:ProcessClinicName};
 }
 
 function ProcessDate
@@ -189,7 +206,7 @@ function ProcessLine
 function FillCards
 {
     $excel = New-Object -Com Excel.Application
-    $inputWB = $excel.Workbooks.Open(INPUT_FILE_NAME)
+    $inputWB = $excel.Workbooks.Open($INPUT_FILE_NAME)
     $inputSheet = $inputWB.Sheets.Item(1)
 
     #    filling each card
@@ -210,8 +227,8 @@ function FillCards
         $rangeAddress = $inputSheet.Cells.Item($rowIndex, 1).Address() + ":" + $inputSheet.Cells.Item($rowIndex, $endColumn).Address()
         $processedRow = $inputSheet.Range($rangeAddress)
 
-        $newOutputTmpFileName = "tmp" + OUTPUT_FILE_NAME
-        Copy-Item OUTPUT_FILE_NAME -Destination $newOutputTmpFileName
+        $newOutputTmpFileName = "tmp" + $OUTPUT_FILE_NAME
+        Copy-Item $OUTPUT_FILE_NAME -Destination $newOutputTmpFileName
         $outputWB = $excel.Workbooks.Open($newOutputFileName)
         $outputSheet = $outputWB.Sheets.Item(1)
 
