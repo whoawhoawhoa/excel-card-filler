@@ -1,5 +1,7 @@
-$global:INPUT_FILE_NAME = "input.xlsx"
-$global:OUTPUT_FILE_NAME = "output.xlsx"
+$global:EXCEL_EXTENSION = ".xlsx"
+$global:INPUT_FILE_NAME = "input" + $EXCEL_EXTENSION
+$global:OUTPUT_FILE_NAME = "output" + $EXCEL_EXTENSION
+$global:PATH_DELIMITER = "\"
 
 $global:MEDIC_NAME_CODES = @{
     @"
@@ -33,14 +35,16 @@ $global:COMMON_CLINIC_PREFIX = @"
 ГБУЗ
 "@
 
+# todo correct typings
+
 function GetCommonProcessor
 {
     #    [OutputType([Function])]
     param(
         [Parameter(Mandatory)]
-        [int]$rowIndex,
+        [int]$script:rowIndex,
         [Parameter(Mandatory)]
-        [int]$columnIndex
+        [int]$script:columnIndex
     )
     function CommonProcessor
     {
@@ -50,10 +54,10 @@ function GetCommonProcessor
             [String]$inputCellValue,
             [Parameter(Mandatory)]
             [String]$previousResult,
-            [Parameter(Mandatory)]
-            [Sheet]$outputSheet
+            [Parameter(Mandatory)] #[Sheet]
+            $outputSheet
         )
-        $outputSheet.Cells.Item($rowIndex, $columnIndex).Value2 = $inputCellValue
+        $outputSheet.Cells.Item($script:rowIndex, $script:columnIndex) = $inputCellValue
         return $previousResult
     }
     return ${function:CommonProcessor}
@@ -67,10 +71,10 @@ function ProcessSecondNameOrName
         [String]$inputCellValue,
         [Parameter(Mandatory)]
         [String]$previousResult,
-        [Parameter(Mandatory)]
-        [Sheet]$outputSheet
+        [Parameter(Mandatory)] #[Sheet]
+        $outputSheet
     )
-    return $previousResult + $inputCellValue
+    return $previousResult + " " + $inputCellValue
 }
 
 function ProcessSurname
@@ -81,10 +85,11 @@ function ProcessSurname
         [String]$inputCellValue,
         [Parameter(Mandatory)]
         [String]$previousResult,
-        [Parameter(Mandatory)]
-        [Sheet]$outputSheet
+        [Parameter(Mandatory)] #[Sheet]
+        $outputSheet
     )
-    $outputSheet.Cells.Item(5, 2).Value2 = $previousResult + $inputCellValue
+    $previousResult = $previousResult + " " + $inputCellValue
+    $outputSheet.Cells.Item(5, 2) = $previousResult
     return $previousResult
 }
 
@@ -96,10 +101,10 @@ function ProcessPolicy
         [String]$inputCellValue,
         [Parameter(Mandatory)]
         [String]$previousResult,
-        [Parameter(Mandatory)]
-        [Sheet]$outputSheet
+        [Parameter(Mandatory)] #[Sheet]
+        $outputSheet
     )
-    $outputSheet.Cells.Item(9, 2).Value2 = $POLICY_PREFIX + $inputCellValue
+    $outputSheet.Cells.Item(9, 2) = $POLICY_PREFIX + $inputCellValue
     return $previousResult
 }
 
@@ -111,13 +116,13 @@ function ProcessPolicyCode
         [String]$inputCellValue,
         [Parameter(Mandatory)]
         [String]$previousResult,
-        [Parameter(Mandatory)]
-        [Sheet]$outputSheet
+        [Parameter(Mandatory)] #[Sheet]
+        $outputSheet
     )
     $POLICY_CODES.GetEnumerator() | foreach {
         if ($inputCellValue -Match $_.key)
         {
-            $outputSheet.Cells.Item(10, 2).Value2 = $_.value
+            $outputSheet.Cells.Item(10, 2) = $_.value
         }
     }
     return $previousResult
@@ -131,8 +136,8 @@ function ProcessClinicName
         [String]$inputCellValue,
         [Parameter(Mandatory)]
         [String]$previousResult,
-        [Parameter(Mandatory)]
-        [Sheet]$outputSheet
+        [Parameter(Mandatory)] #[Sheet]
+        $outputSheet
     )
     $startIndex = $inputCellValue.IndexOf($COMMON_CLINIC_PREFIX)
     $clinicName = $inputCellValue
@@ -140,7 +145,7 @@ function ProcessClinicName
     {
         $clinicName = $inputCellValue.Substring($startIndex)
     }
-    $outputSheet.Cells.Item(4, 2).Value2 = $clinicName
+    $outputSheet.Cells.Item(4, 2) = $clinicName
     return $previousResult
 }
 
@@ -161,39 +166,39 @@ function ProcessDate
 {
     [OutputType([Void])]
     param(
-        [Parameter(Mandatory)]
-        [Sheet]$inputSheet,
-        [Parameter(Mandatory)]
-        [Sheet]$outputSheet
+        [Parameter(Mandatory)] #[Sheet]
+        $inputSheet,
+        [Parameter(Mandatory)] #[Sheet]
+        $outputSheet
     )
     #    todo should we locate cell dynamically?
-    $fullDate = $sheet.Cells.Item(3, 3).Value2
+    $fullDate = $inputSheet.Cells.Item(3, 3).Value2
     $dateParts = $fullDate -split " "
-    $outputSheet.Cells.Item(1, 2).Value2 = $dateParts[0]
+    $outputSheet.Cells.Item(1, 2) = $dateParts[0]
 }
 
 function ProcessMedicName
 {
     [OutputType([Void])]
     param(
-        [Parameter(Mandatory)]
-        [Sheet]$inputSheet,
-        [Parameter(Mandatory)]
-        [Sheet]$outputSheet
+        [Parameter(Mandatory)] #[Sheet]
+        $inputSheet,
+        [Parameter(Mandatory)] #[Sheet]
+        $outputSheet
     )
     #    todo should we locate cell dynamically?
-    $medicName = $sheet.Cells.Item(4, 4).Value2
-    $outputSheet.Cells.Item(1, 2).Value2 = MEDIC_NAME_CODES[$medicName]
+    $medicName = $inputSheet.Cells.Item(4, 4).Value2
+    $outputSheet.Cells.Item(1, 2) = $MEDIC_NAME_CODES[$medicName]
 }
 
 function ProcessLine
 {
     [OutputType([String])]
     param(
-        [Parameter(Mandatory)]
-        [Range]$row,
-        [Parameter(Mandatory)]
-        [Sheet]$outputSheet
+        [Parameter(Mandatory)] #[Range]
+        $row,
+        [Parameter(Mandatory)] #[Sheet]
+        $outputSheet
     )
     $previousResult = ""
     $sortedProcessors = $PROCESSORS.GetEnumerator() | Sort-Object -Property key | foreach {
@@ -201,14 +206,20 @@ function ProcessLine
         $cellValue = $row.Item($_.key).Value2
         $previousResult = $processor.Invoke($cellValue, $previousResult, $outputSheet)
     }
+    return $previousResult
 }
 
 function FillCards
 {
-    $excel = New-Object -Com Excel.Application
-    $inputWB = $excel.Workbooks.Open($INPUT_FILE_NAME)
-    $inputSheet = $inputWB.Sheets.Item(1)
+    $inputExcel = New-Object -Com Excel.Application
+    #    $inputExcel.Visible = $true
+    $outputExcel = New-Object -Com Excel.Application
+    #    $outputExcel.Visible = $true
+    $inputWBPath = $PSScriptRoot + $PATH_DELIMITER + $INPUT_FILE_NAME
+    $outputWBPath = $PSScriptRoot + $PATH_DELIMITER + $OUTPUT_FILE_NAME
 
+    $inputWB = $inputExcel.Workbooks.Open($inputWBPath)
+    $inputSheet = $inputWB.Sheets.Item(1)
     #    filling each card
     $xlCellTypeLastCell = 11
     $endColumn = $inputSheet.UsedRange.SpecialCells($xlCellTypeLastCell).Column
@@ -217,9 +228,10 @@ function FillCards
     #    finding first non-null cell
     while ($firstRowCell.Value2.length -eq 0)
     {
-        $rowIndex++
         $firstRowCell = $inputSheet.Cells.Item($rowIndex, 1)
+        $rowIndex++
     }
+    $firstRowCell = $inputSheet.Cells.Item($rowIndex, 1)
     #    for each valuable row, process it
     $result = ""
     while ($firstRowCell.Value2.length -ne 0)
@@ -228,8 +240,10 @@ function FillCards
         $processedRow = $inputSheet.Range($rangeAddress)
 
         $newOutputTmpFileName = "tmp" + $OUTPUT_FILE_NAME
-        Copy-Item $OUTPUT_FILE_NAME -Destination $newOutputTmpFileName
-        $outputWB = $excel.Workbooks.Open($newOutputFileName)
+        $newOutputTmpFilePath = $PSScriptRoot + $PATH_DELIMITER + $newOutputTmpFileName
+
+        Copy-Item $outputWBPath -Destination $newOutputTmpFilePath
+        $outputWB = $outputExcel.Workbooks.Open($newOutputTmpFilePath)
         $outputSheet = $outputWB.Sheets.Item(1)
 
         ProcessDate -inputSheet $inputSheet -outputSheet $outputSheet
@@ -237,19 +251,21 @@ function FillCards
 
         $result = ProcessLine -row $processedRow -outputSheet $outputSheet
 
-        if ($result.length -ne 0)
-        {
-            Rename-Item -Path $outputWB.Path -NewName $result
-        }
-
         $outputWB.Save()
         $outputWB.Close()
+
+        if ($result.length -ne 0)
+        {
+            $newName = $result + $EXCEL_EXTENSION
+            Rename-Item -Path $newOutputTmpFilePath -NewName $newName
+        }
 
         $rowIndex++
         $firstRowCell = $inputSheet.Cells.Item($rowIndex, 1)
     }
     $inputWB.Close()
-    $excel.Quit()
+    $inputExcel.Quit()
+    $outputExcel.Quit()
 }
 
 FillCards
