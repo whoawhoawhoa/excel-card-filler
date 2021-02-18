@@ -1,66 +1,49 @@
+﻿[Console]::InputEncoding = [System.Text.Encoding]::UTF8
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+
 $global:EXCEL_EXTENSION = ".xlsx"
 $global:INPUT_FILE_NAME = "input" + $EXCEL_EXTENSION
 $global:OUTPUT_FILE_NAME = "output" + $EXCEL_EXTENSION
+$global:OUTPUT_SHEET_INDEX = 3
+
 $global:PATH_DELIMITER = "\"
 
 $global:MEDIC_NAME_CODES = @{
-    @"
-Барский
-"@ = "4000";
-    @"
-Маслов
-"@ = "4001";
+    "Барский" = 4000;
+    "Маслов" = 4001;
 }
 
-$global:POLICY_PREFIX = @"
-ЕНП - 
-"@
+$global:POLICY_PREFIX = "ЕНП - "
 
 $global:POLICY_CODES = @{
-    @"
-АВМ
-"@ = "1";
-    @"
-МАКС-М
-"@ = "2";
-    @"
-АСКОМЕД
-"@ = "3";
-    @"
-АЛЬЯНСМЕД
-"@ = "4";
+    "АВМ" = 1;
+    "МАКС-М" = 2;
+    "АСКОМЕД" = 3;
+    "АЛЬЯНСМЕД" = 4;
 }
 
-$global:COMMON_CLINIC_PREFIX = @"
-ГБУЗ
-"@
+$global:COMMON_CLINIC_PREFIX = "ГБУЗ"
 
 # todo correct typings
 
-function GetCommonProcessor
+function CommonProcessor
 {
-    #    [OutputType([Function])]
+    [OutputType([String])]
     param(
         [Parameter(Mandatory)]
-        [int]$script:rowIndex,
+        [int]$rowIndex,
         [Parameter(Mandatory)]
-        [int]$script:columnIndex
+        [int]$columnIndex,
+        [Parameter(Mandatory)]
+        [String]$inputCellValue,
+        [Parameter(Mandatory)]
+        [AllowEmptyString()]
+        [String]$previousResult,
+        [Parameter(Mandatory)] #[Sheet]
+        $outputSheet
     )
-    function CommonProcessor
-    {
-        [OutputType([String])]
-        param(
-            [Parameter(Mandatory)]
-            [String]$inputCellValue,
-            [Parameter(Mandatory)]
-            [String]$previousResult,
-            [Parameter(Mandatory)] #[Sheet]
-            $outputSheet
-        )
-        $outputSheet.Cells.Item($script:rowIndex, $script:columnIndex) = $inputCellValue
-        return $previousResult
-    }
-    return ${function:CommonProcessor}
+    $outputSheet.Cells.Item($rowIndex, $columnIndex) = $inputCellValue
+    return $previousResult
 }
 
 function ProcessSecondNameOrName
@@ -150,15 +133,15 @@ function ProcessClinicName
 }
 
 $global:PROCESSORS = @{
-    2 = GetCommonProcessor 12 2;
+    2 = { param($1, $2, $3) CommonProcessor 12 2 $1 $2 $3 };
     3 = ${function:ProcessSecondNameOrName};
     4 = ${function:ProcessSecondNameOrName};
     5 = ${function:ProcessSurname};
-    6 = GetCommonProcessor 7 2;
-    7 = GetCommonProcessor 6 2;
+    6 = { param($1, $2, $3) CommonProcessor 7 2 $1 $2 $3 };
+    7 = { param($1, $2, $3) CommonProcessor 6 2 $1 $2 $3 };
     8 = ${function:ProcessPolicy};
     9 = ${function:ProcessPolicyCode};
-    10 = GetCommonProcessor 8 2;
+    10 = { param($1, $2, $3) CommonProcessor 8 2 $1 $2 $3 };
     11 = ${function:ProcessClinicName};
 }
 
@@ -172,9 +155,9 @@ function ProcessDate
         $outputSheet
     )
     #    todo should we locate cell dynamically?
-    $fullDate = $inputSheet.Cells.Item(3, 3).Value2
-    $dateParts = $fullDate -split " "
-    $outputSheet.Cells.Item(1, 2) = $dateParts[0]
+    $inputDate = $inputSheet.Cells.Item(3, 4).Value2
+    $outputDate = [math]::Floor($inputDate)
+    $outputSheet.Cells.Item(1, 2) = $outputDate
 }
 
 function ProcessMedicName
@@ -187,8 +170,9 @@ function ProcessMedicName
         $outputSheet
     )
     #    todo should we locate cell dynamically?
-    $medicName = $inputSheet.Cells.Item(4, 4).Value2
-    $outputSheet.Cells.Item(1, 2) = $MEDIC_NAME_CODES[$medicName]
+    $medicName = $inputSheet.Cells.Item(4, 4).Value2.Trim()
+    $medicCode = $MEDIC_NAME_CODES[$medicName]
+    $outputSheet.Cells.Item(3, 2) = $medicCode
 }
 
 function ProcessLine
@@ -209,17 +193,21 @@ function ProcessLine
     return $previousResult
 }
 
+# todo error handling
 function FillCards
 {
     $inputExcel = New-Object -Com Excel.Application
-    #    $inputExcel.Visible = $true
+    $inputExcel.Visible = $true
+
     $outputExcel = New-Object -Com Excel.Application
-    #    $outputExcel.Visible = $true
+    $outputExcel.Visible = $true
+
     $inputWBPath = $PSScriptRoot + $PATH_DELIMITER + $INPUT_FILE_NAME
     $outputWBPath = $PSScriptRoot + $PATH_DELIMITER + $OUTPUT_FILE_NAME
 
     $inputWB = $inputExcel.Workbooks.Open($inputWBPath)
     $inputSheet = $inputWB.Sheets.Item(1)
+
     #    filling each card
     $xlCellTypeLastCell = 11
     $endColumn = $inputSheet.UsedRange.SpecialCells($xlCellTypeLastCell).Column
@@ -244,13 +232,14 @@ function FillCards
 
         Copy-Item $outputWBPath -Destination $newOutputTmpFilePath
         $outputWB = $outputExcel.Workbooks.Open($newOutputTmpFilePath)
-        $outputSheet = $outputWB.Sheets.Item(1)
+
+        $outputSheet = $outputWB.Sheets.Item($OUTPUT_SHEET_INDEX)
 
         ProcessDate -inputSheet $inputSheet -outputSheet $outputSheet
         ProcessMedicName -inputSheet $inputSheet -outputSheet $outputSheet
 
         $result = ProcessLine -row $processedRow -outputSheet $outputSheet
-
+        # todo SaveAs
         $outputWB.Save()
         $outputWB.Close()
 
